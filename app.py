@@ -12,7 +12,6 @@ app = Flask(__name__)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["OUTPUT_FOLDER"] = OUTPUT_FOLDER
 
-# Simple inline HTML template
 HTML_PAGE = """
 <!DOCTYPE html>
 <html>
@@ -52,10 +51,8 @@ def upload_file():
     input_path = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
     output_path = os.path.join(app.config["OUTPUT_FOLDER"], f"{os.path.splitext(file.filename)[0]}_transcoded.mp4")
 
-    # Save uploaded file
     file.save(input_path)
 
-    # Run ffmpeg synchronously
     subprocess.run(
         ["ffmpeg", "-y", "-i", input_path, "-c:v", "libx264", "-preset", "fast", "-crf", "23", output_path],
         check=True
@@ -68,4 +65,5 @@ def download_file(filename):
     return send_from_directory(app.config["OUTPUT_FOLDER"], filename, as_attachment=False)
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0", port=5000)
+
