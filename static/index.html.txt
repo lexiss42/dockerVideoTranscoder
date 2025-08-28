@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Simple Video Transcoder</title>
+</head>
+<body>
+  <h1>Upload & Transcode</h1>
+
+  <!-- Upload form -->
+  <form id="uploadForm" enctype="multipart/form-data">
+    <input type="file" name="file" />
+    <button type="submit">Upload</button>
+  </form>
+
+  <p id="uploadStatus"></p>
+
+  <!-- Trigger transcode -->
+  <button id="transcodeBtn" disabled>Transcode Video</button>
+  <p id="transcodeStatus"></p>
+
+  <script>
+    let uploadedFile = "";
+
+    document.getElementById("uploadForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+
+      const res = await fetch("/upload", { method: "POST", body: formData });
+      const data = await res.json();
+
+      uploadedFile = data.filename;
+      document.getElementById("uploadStatus").innerText = "Uploaded: " + uploadedFile;
+      document.getElementById("transcodeBtn").disabled = false;
+    };
+
+    document.getElementById("transcodeBtn").onclick = async () => {
+      const res = await fetch("/transcode/" + uploadedFile, { method: "POST" });
+      const data = await res.json();
+
+      if (data.output_url) {
+        document.getElementById("transcodeStatus").innerHTML =
+          "Transcoded: <a href='" + data.output_url + "' download>Download Here</a>";
+      } else {
+        document.getElementById("transcodeStatus").innerText = "Error: " + data.error;
+      }
+    };
+  </script>
+</body>
+</html>
