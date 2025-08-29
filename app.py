@@ -1,82 +1,127 @@
+# app.py
 import os
 import subprocess
-import jwt
 import datetime
-from flask import Flask, request, send_from_directory, jsonify
+import jwt
+from flask import Flask, request, render_template_string, send_from_directory, redirect, make_response
+
+UPLOAD_FOLDER = "uploads"
+OUTPUT_FOLDER = "outputs"
+SECRET_KEY = "supersecretkey"  # change this in production!
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["OUTPUT_FOLDER"] = OUTPUT_FOLDER
+app.config["SECRET_KEY"] = SECRET_KEY
 
-app.config["UPLOAD_FOLDER"] = "uploads"
-app.config["OUTPUT_FOLDER"] = "outputs"
-app.config["SECRET_KEY"] = "your-secret-key"
+# Demo user (hardcoded for simplicity)
+USER_CREDENTIALS = {"username": "admin", "password": "password123"}
 
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-os.makedirs(app.config["OUTPUT_FOLDER"], exist_ok=True)
+# HTML Templates
+LOGIN_PAGE = """
+<!DOCTYPE html>
+<html>
+<head><title>Login</title></head>
+<body>
+    <h1>Login</h1>
+    <form method="post" action="/login">
+        <input type="text" name="username" placeholder="Username" required><br>
+        <input type="password" name="password" placeholder="Password" required><br>
+        <button type="submit">Login</button>
+    </form>
+</body>
+</html>
+"""
 
-# ---------------- TOKEN UTILS ---------------- #
+UPLOAD_PAGE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Transcoder</title>
+</head>
+<body>
+    <h1>Upload Video</h1>
+    <form method="post" action="/upload" enctype="multipart/form-data">
+        <input type="file" name="video">
+        <button type="submit">Upload & Transcode</button>
+    </form>
 
-def generateToken(user_id):
+    <h2>Processed Videos</h2>
+    <ul>
+    {% for file in files %}
+        <li><a href="/outputs/{{ file }}">{{ file }}</a></li>
+    {% endfor %}
+    </ul>
+
+    <form action="/logout" method="post">
+        <button type="submit">Logout</button>
+    </form>
+</body>
+</html>
+"""
+
+# ---------------- AUTH HELPERS ----------------
+def generateToken(username):
     expiration = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
-    token = jwt.encode({"user_id": user_id, "exp": expiration}, app.config["SECRET_KEY"], algorithm="HS256")
+    token = jwt.encode({"username": username, "exp": expiration}, app.config["SECRET_KEY"], algorithm="HS256")
     return token
 
 def verifyToken(token):
     try:
-        data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
-        return data
+        decoded = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+        return decoded
     except jwt.ExpiredSignatureError:
         return None
     except jwt.InvalidTokenError:
         return None
 
-def getJWTUser(token):
-    data = verifyToken(token)
-    if data:
-        return data["user_id"]
-    return None
+def getJWTUser():
+    token = request.cookies.get("token")
+    if not token:
+        return None
+    return verifyToken(token)
 
-# ---------------- ROUTES ---------------- #
-
-@app.route("/")
+# ---------------- ROUTES ----------------
+@app.route("/", methods=["GET"])
 def index():
-    return """
-    <!DOCTYPE html>
-    <html>
-    <body>
-        <h2>Upload and Transcode Video</h2>
-        <form action="/upload" method="post" enctype="multipart/form-data">
-            <label for="video">Choose file:</label>
-            <input type="file" name="video" required><br><br>
+    user = getJWTUser()
+    files = os.listdir(OUTPUT_FOLDER)
 
-            <label for="quality">Quality:</label>
-            <select name="quality">
-                <option value="1080p">1080p</option>
-                <option value="720p" selected>720p</option>
-                <option value="480p">480p</option>
-                <option value="360p">360p</option>
-            </select><br><br>
+    if not user:
+        return redirect("/login")
 
-            <label for="fps">FPS:</label>
-            <select name="fps">
-                <option value="30" selected>30</option>
-                <option value="60">60</option>
-            </select><br><br>
+    return render_template_string(UPLOAD_PAGE, files=files)
 
-            <label for="filetype">Output type:</label>
-            <select name="filetype">
-                <option value="mp4" selected>mp4</option>
-                <option value="webm">webm</option>
-                <option value="mov">mov</option>
-            </select><br><br>
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        return LOGIN_PAGE
 
-            <button type="submit">Upload</button>
-        </form>
-    </body>
-    </html>
-    """
+    username = request.form.get("username")
+    password = request.form.get("password")
+
+    if username == USER_CREDENTIALS["username"] and password == USER_CREDENTIALS["password"]:
+        token = generateToken(username)
+        resp = make_response(redirect("/"))
+        resp.set_cookie("token", token)
+        return resp
+    return "Invalid credentials", 401
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    resp = make_response(redirect("/login"))
+    resp.delete_cookie("token")
+    return resp
 
 @app.route("/upload", methods=["POST"])
 def uploadFile():
+    user = getJWTUser()
+    if not user:
+        return redirect("/login")
+
     if "video" not in request.files:
         return "No file part", 400
     file = request.files["video"]
@@ -84,38 +129,21 @@ def uploadFile():
         return "No selected file", 400
 
     input_path = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
-    output_ext = request.form.get("filetype", "mp4")
-    output_path = os.path.join(app.config["OUTPUT_FOLDER"],
-        f"{os.path.splitext(file.filename)[0]}_transcoded.{output_ext}")
+    output_filename = f"{os.path.splitext(file.filename)[0]}_transcoded.mp4"
+    output_path = os.path.join(app.config["OUTPUT_FOLDER"], output_filename)
 
-    # Save uploaded file
     file.save(input_path)
 
-    # Build ffmpeg args from quality + fps
-    quality = request.form.get("quality", "720p")
-    fps = request.form.get("fps", "30")
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", input_path, "-c:v", "libx264", "-preset", "fast", "-crf", "23", output_path],
+        check=True
+    )
 
-    scale_map = {
-        "1080p": "1920:1080",
-        "720p": "1280:720",
-        "480p": "854:480",
-        "360p": "640:360"
-    }
-
-    subprocess.run([
-        "ffmpeg", "-y", "-i", input_path,
-        "-vf", f"scale={scale_map.get(quality, '1280:720')},fps={fps}",
-        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-        output_path
-    ], check=True)
-
-    return f"File uploaded and transcoded: <a href='/outputs/{os.path.basename(output_path)}'>{os.path.basename(output_path)}</a>"
+    return f"File uploaded and transcoded: <a href='/outputs/{output_filename}'>{output_filename}</a>"
 
 @app.route("/outputs/<path:filename>")
 def downloadFile(filename):
     return send_from_directory(app.config["OUTPUT_FOLDER"], filename, as_attachment=False)
 
-# ---------------- MAIN ---------------- #
-
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
