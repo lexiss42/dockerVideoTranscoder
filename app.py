@@ -69,11 +69,11 @@ SCALE_MAP = {
     "360" : "640:360",
 }
 
-def sanitizeFilename(filename: str) -> str:
+def checkFilename(filename: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_.-]", "_", os.path.basename(filename))
 
 def outputPaths(originalFilename: str, quality: str, framerate: str, fmt: str):
-    safeBase = sanitizeFilename(os.path.splitext(originalFilename)[0])
+    safeBase = checkFilename(os.path.splitext(originalFilename)[0])
     outName = f"{safeBase}_{quality}p_{framerate}fps.{fmt}"
     return outName, os.path.join(OUTPUT_FOLDER, outName)
 
@@ -115,7 +115,7 @@ def uploadFile():
     framerate = request.form.get("framerate", "30")
     fmt = request.form.get("format", "mp4").lower()
 
-    safeName = sanitizeFilename(file.filename)
+    safeName = checkFilename(file.filename)
     inputPath = os.path.join(UPLOAD_FOLDER, safeName)
     file.save(inputPath)
 
@@ -149,5 +149,6 @@ def videos():
 #code to ensure it runs on all ips
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
 
 
