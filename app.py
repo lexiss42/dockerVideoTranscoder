@@ -5,7 +5,7 @@ import json
 import subprocess
 from flask import Flask, request, render_template_string, send_from_directory, jsonify
 
-# --------- Config ---------
+#config
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "outputs"
 ALLOWED_OUTPUTS = (".mp4", ".mov", ".mkv")
@@ -18,7 +18,7 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["OUTPUT_FOLDER"] = OUTPUT_FOLDER
 
 
-# --------- HTML Template ---------
+#html
 HTML_PAGE = """
 <!DOCTYPE html>
 <html>
@@ -117,7 +117,7 @@ def writeMetadata(path: str, *, resolution: str, framerate: str, fmt: str):
         json.dump(meta, f)
 
 
-# --------- HTML Routes ---------
+#html routes
 @app.route("/", methods=["GET"])
 def index():
     files = []
@@ -164,7 +164,7 @@ def downloadFile(filename):
     return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=False)
 
 
-# --------- REST API ---------
+#rest-api
 @app.route("/api/upload", methods=["POST"])
 def apiUpload():
     if "video" not in request.files:
@@ -229,6 +229,7 @@ def apiVideo(filename):
     })
 
 
-# --------- Main ---------
+#makes sure it works on all ips in network so auto-assign works
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
