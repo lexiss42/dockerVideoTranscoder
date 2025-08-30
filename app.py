@@ -5,7 +5,7 @@ import json
 import subprocess
 from flask import Flask, request, render_template_string, send_from_directory, jsonify
 
-# --------- Config ---------
+#config
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "outputs"
 ALLOWED_OUTPUTS = (".mp4", ".mov", ".mkv")
@@ -17,7 +17,7 @@ app = Flask(__name__)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["OUTPUT_FOLDER"] = OUTPUT_FOLDER
 
-# --------- HTML Template ---------
+#html
 HTML_PAGE = """
 <!DOCTYPE html>
 <html>
@@ -62,7 +62,7 @@ HTML_PAGE = """
 </html>
 """
 
-# --------- Helpers ---------
+#helper functions
 SCALE_MAP = {
     "1080": "1920:1080",
     "720" : "1280:720",
@@ -97,7 +97,7 @@ def listVideos():
             items.append({"file": f, "metadata": getMetadata(f), "download_url": f"/outputs/{f}"})
     return items
 
-# --------- Routes ---------
+#routes
 @app.route("/", methods=["GET"])
 def index():
     # Always return HTML at root
@@ -147,6 +147,7 @@ def downloadFile(filename):
 def videos():
     return jsonify(listVideos())
 
-# --------- Main ---------
+#code to ensure it runs on all ips
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
