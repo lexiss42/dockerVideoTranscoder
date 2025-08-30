@@ -20,7 +20,7 @@ app.config["SECRET_KEY"] = SECRET_KEY
 # Demo user (hardcoded for simplicity)
 USER_CREDENTIALS = {"username": "admin", "password": "password123"}
 
-# HTML Templates
+# ---------------- HTML Templates ----------------
 LOGIN_PAGE = """
 <!DOCTYPE html>
 <html>
@@ -45,7 +45,29 @@ UPLOAD_PAGE = """
 <body>
     <h1>Upload Video</h1>
     <form method="post" action="/upload" enctype="multipart/form-data">
-        <input type="file" name="video">
+        <input type="file" name="video" required><br><br>
+
+        <label>Quality:</label>
+        <select name="quality" required>
+            <option value="1920x1080">1080p</option>
+            <option value="1280x720">720p</option>
+            <option value="854x480">480p</option>
+            <option value="640x360">360p</option>
+        </select><br><br>
+
+        <label>Frame Rate:</label>
+        <select name="fps" required>
+            <option value="30">30 fps</option>
+            <option value="60">60 fps</option>
+        </select><br><br>
+
+        <label>Output Format:</label>
+        <select name="format" required>
+            <option value="mp4">MP4</option>
+            <option value="mkv">MKV</option>
+            <option value="mov">MOV</option>
+        </select><br><br>
+
         <button type="submit">Upload & Transcode</button>
     </form>
 
@@ -128,14 +150,28 @@ def uploadFile():
     if file.filename == "":
         return "No selected file", 400
 
+    # User-selected options
+    quality = request.form.get("quality", "1280x720")
+    fps = request.form.get("fps", "30")
+    fmt = request.form.get("format", "mp4")
+
+    # Ensure output filename matches chosen format
     input_path = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
-    output_filename = f"{os.path.splitext(file.filename)[0]}_transcoded.mp4"
+    base_name = os.path.splitext(file.filename)[0]
+    output_filename = f"{base_name}_{quality}_{fps}fps.{fmt}"
     output_path = os.path.join(app.config["OUTPUT_FOLDER"], output_filename)
 
+    # Save upload
     file.save(input_path)
 
+    # Run ffmpeg
     subprocess.run(
-        ["ffmpeg", "-y", "-i", input_path, "-c:v", "libx264", "-preset", "fast", "-crf", "23", output_path],
+        [
+            "ffmpeg", "-y", "-i", input_path,
+            "-vf", f"scale={quality},fps={fps}",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            output_path
+        ],
         check=True
     )
 
